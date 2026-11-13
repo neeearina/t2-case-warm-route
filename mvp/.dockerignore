@@ -1,0 +1,15 @@
+*
+!requirements.txt
+!app/
+!app/**
+!migrations/
+!migrations/**
+!web/
+!web/**
+**/.env
+**/__pycache__
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+**/.DS_Store
