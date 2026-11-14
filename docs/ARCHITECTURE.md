@@ -37,6 +37,74 @@ flowchart LR
 | Общая бизнес-логика | Геопривязка, дедупликация, объединение инцидентов, допустимые переходы, повторная проверка, расчёт оценки |
 | Background Worker | Загрузка источников, вызовы общей обработки, периодический пересчёт и выполнение наступивших повторных проверок |
 
+## Схема базы данных
+
+Прикладные таблицы PostgreSQL определены в [миграции](../mvp/migrations/001.sql). PostGIS хранит координаты участков и используется для геопривязки сигналов.
+
+```mermaid
+erDiagram
+    segments ||--o{ incidents : "инциденты участка"
+    segments |o--o{ signals : "геопривязка"
+    incidents |o--o{ signals : "сигналы инцидента"
+    segments ||--o{ context : "текущий контекст"
+    incidents ||--o{ transitions : "история статусов"
+
+    segments {
+        integer id PK
+        text name
+        text kind
+        geography location "Point, SRID 4326"
+        double criticality "0–1"
+    }
+    incidents {
+        bigint id PK
+        integer segment_id FK
+        text category "ice / snow / delay"
+        text status "VERIFYING / ACTIVE / RESOLVED / RECHECK / CLOSED"
+        timestamptz started_at
+        timestamptz updated_at
+        timestamptz resolved_at "nullable"
+        timestamptz closed_at "nullable"
+        timestamptz recheck_at "nullable"
+        double score
+        jsonb explanation
+    }
+    signals {
+        bigint id PK
+        text source "часть UNIQUE(source, external_id)"
+        text external_id "часть UNIQUE(source, external_id)"
+        timestamptz occurred_at
+        integer segment_id FK "nullable"
+        bigint incident_id FK "nullable"
+        text category
+        text text
+        double latitude
+        double longitude
+        boolean synthetic
+    }
+    context {
+        text source PK "составной ключ"
+        integer segment_id PK, FK "составной ключ"
+        timestamptz observed_at
+        double value "0–1"
+        boolean synthetic
+    }
+    source_status {
+        text source PK
+        timestamptz last_success "nullable"
+        text last_error "nullable"
+    }
+    transitions {
+        bigint id PK
+        bigint incident_id FK
+        text status
+        timestamptz changed_at
+        text reason
+    }
+```
+
+`segments` хранит участки, `signals` — поступившие сигналы, `incidents` — объединённые проблемы и их текущую оценку. `context` содержит последнее значение каждого источника для участка; `transitions` сохраняет историю смены статуса. В `source_status` записываются время успешного обращения к источнику и последняя ошибка; внешних ключей на эту таблицу нет.
+
 ## Обработка
 
 ```mermaid
